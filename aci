@@ -1,0 +1,128 @@
+#!/bin/bash
+
+clear
+while [ 1 ]
+do
+	echo "Automatic Instence Initialize Program"
+	#이미지 선택
+	echo  " Select instence image"
+	select i_image in "CentOS7" "Ubuntu 18.04"
+	do
+		case "$i_image" in
+
+		CentOS7)
+			echo "$i_image"
+			break;;
+
+		"Ubuntu 18.04")
+			echo "sorry $i_image is not ready yet. plz try again"
+			continue;;
+			
+		*)
+			echo "Wrong answer, return to first"
+			continue;;
+		esac
+	done
+	#인스턴스 이름
+	echo -n "Naming your instance : "
+	read i_name
+	
+	#인스턴스 갯수
+	echo -n "How many make instances? ( 1 - 4 ) : "
+	read i_num
+	case "$i_num" in
+	1)
+		echo "make $i_num instence";;
+	2)
+		echo "make $i_num instences";;
+	3)
+		echo "make $i_num instences";;
+	4)
+		echo "make $i_num instences";;
+	*)
+		echo "Wrong answer, plz retry"
+		continue;;
+	esac
+
+	#CPU 갯수
+	echo -n "How many want CPUs? ( 1 - 4 ) : "
+        read i_cpu
+        case "$i_cpu" in
+        1)
+                echo "run $i_cpu cpu";;
+        2)
+                echo "run $i_cpu cpus";;
+        3)
+                echo "run $i_cpu cpus";;
+        4)
+                echo "run $i_cpu cpus";;
+        *)
+                echo "Wrong answer, plz retry"
+                continue;;
+        esac
+	#ram size
+	echo -n "How many want RAM size? ( 1 - 4 ) : "
+        read i_ram
+        case "$i_ram" in
+        1)
+                echo "make $i_ram GB";;
+        2)
+                echo "make $i_ram GB";;
+        3)
+                echo "make $i_ram GB";;
+        4)
+                echo " make $i_ram GB";;
+        *)
+                echo "Wrong answer, plz retry"
+                continue;;
+        esac
+	break;	
+done	
+#옵션 끝 설치 시작
+echo "Start instence initialize."
+ram=$(echo "${i_ram} * 1024" | bc)
+# 갯수만큼의 이미지 복사
+for (( i=0; i<$i_num; i++))
+do
+	cp /cloud/CentOS7-Base.qcow2 /cloud/${i_name}_${i}.qcow2
+	echo "set ${i_name}_${i} cp done"
+done
+# 각 인스턴스 설정
+for (( i=0; i<$i_num; i++))
+do
+	virt-install --name ${i_name}_${i} --vcpus ${i_cpu} --ram ${ram} --network network:default,model=virtio --disk /cloud/${i_name}_${i}.qcow2 --import --noautoconsole
+	echo "set ${i_name}_${i} initialrize done"
+done
+
+h_cpu=$(echo "100-$(sar 1 3 | grep Average | gawk '{print $8}')" | bc)
+
+
+#IP 설정
+echo "[IP initialize]"
+
+for (( i=0; i<$i_num; i++))
+do
+	
+	while [ 1 ]
+	do
+		i_add=$(virsh domifaddr ${i_name}_${i} | grep -v Name | gawk '{print $4}' | sed '/^$/d' | gawk -F/ '{print $1}')
+
+		if [ -z $i_add ]
+		then
+			sleep 5
+			echo -n "."
+		else
+			break
+		fi
+	done
+	echo "${i_num}_${i} IP address is : $i_add"
+	#DB 전송
+	mysql mylab -u testuser -h 192.168.1.199 -ptest123 -e "insert into instance values (NULL,'${i_name}_$i','$i_add',$i_cpu,$i_ram,'$h_name',$h_cpu)"
+
+done
+#결과 출력
+h_name=$(hostname)
+echo "현재 CPU 사용률 : $h_cpu"
+echo " transport to DB "
+echo -n " Press any key "
+read any
